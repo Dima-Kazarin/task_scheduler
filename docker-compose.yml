@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  flower:
+    image: mher/flower
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+
+  redis:
+    image: redis
+    command: redis-server
+    ports:
+      - "6379:6379"
+
+
+  pgdb:
+    image: postgres
+    container_name: pgdb
+    restart: always
+    environment:
+      - POSTGRES_DB=task_scheduler
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+
+  django:
+    container_name: django
+    build:
+      context: ./task_scheduler
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./task_scheduler:/usr/src/app/
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=a0dsi09ad0j1sda89dsajdas
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+    depends_on:
+      - redis
+      - pgdb
+
+  celery:
+    container_name: celery
+    build:
+      context: ./task_scheduler
+    command: celery --app=task_scheduler worker -l INFO -Q tasks -E -B
+    volumes:
+      - ./task_scheduler:/usr/src/app/
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=a0dsi09ad0j1sda89dsajdas
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+    depends_on:
+      - redis
+      - django
+      - pgdb
+
+
+volumes:
+  postgres_data: null
